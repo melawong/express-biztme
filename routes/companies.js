@@ -1,5 +1,3 @@
-"use strict";
-
 const db = require("../db");
 const express = require("express");
 const { BadRequestError, NotFoundError } = require("../expressError");
@@ -20,21 +18,32 @@ router.get("/", async function (req, res) {
 });
 
 
-/**Return obj of company: {company: {code, name, description}}*/
+/**Return obj of company: {company: {code, name, description}}
+Return obj of company: {company: {code, name, description, invoices: [id, ...]}}
+If the company given cannot be found, this should return a 404 status response.*/
 
 router.get("/:code", async function (req, res) {
   const code = req.params.code;
 
-  const results = await db.query(
+  const companyResults = await db.query(
     `SELECT code, name, description
          FROM companies
          WHERE code = $1`, [code]);
-  const company = results.rows[0];
+  const company = companyResults.rows[0];
+
+
+  const invoiceResults = await db.query(
+    `SELECT id, amt, paid, add_date, paid_date
+         FROM invoices
+         JOIN companies ON comp_code = code
+         WHERE code = $1`, [code]);
+  const invoices = invoiceResults.rows;
+
+  company.invoices = invoices;
+
 
   if (!company) {
-    console.log("in if statement");
-    throw new Error();
-    // return res.status(404).json({err:"No such company code."})
+    throw new NotFoundError("error");
   }
 
   return res.json({ company });
@@ -50,7 +59,7 @@ router.post("/", async function (req, res) {
   const { code, name, description } = req.body;
 
   if (!code || !name || !description) {
-    throw new BadRequestError();
+    throw new BadRequestError("Please enter valid params");
   }
 
   const result = await db.query(
@@ -65,7 +74,6 @@ router.post("/", async function (req, res) {
 });
 
 
-// PUT /companies/[code]
 /**Edit existing company.
 Needs to be given JSON like: {name, description}
 Returns update company object: {company: {code, name, description}} */
@@ -86,7 +94,6 @@ router.put("/:code", async function (req, res) {
 
   if (!company) {
     throw new NotFoundError("No such company code.");
-    // return res.status(404).json({err:"No such company code."})
   };
 
   return res.json({ company });
@@ -94,18 +101,22 @@ router.put("/:code", async function (req, res) {
 });
 
 
-// DELETE /companies/[code]
 /** Deletes company.
-// Should return 404 if company cannot be found.
-// Returns {status: "deleted"}
+  Returns {status: "deleted"}
+  Should return 404 if company cannot be found.
  */
+router.delete("/:code", async function (req, res) {
+  const code = req.params.code;
+  if (!code) {
+    throw new NotFoundError("No such company code");
+  }
 
-// router.delete("/:code", async function (req, res) {
-
-// });
-
-
-
+  await db.query(
+    "DELETE FROM companies WHERE code = $1",
+    [req.params.code],
+  );
+  return res.json({ status: "deleted" });
+});
 
 
 
