@@ -1,5 +1,6 @@
 const db = require("../db");
 const express = require("express");
+const slugify = require("slugify");
 const { BadRequestError, NotFoundError } = require("../expressError");
 
 const router = new express.Router();
@@ -31,20 +32,19 @@ router.get("/:code", async function (req, res) {
          WHERE code = $1`, [code]);
   const company = companyResults.rows[0];
 
+  if (!company) {
+    throw new NotFoundError("No such company code");
+  }
 
   const invoiceResults = await db.query(
     `SELECT id, amt, paid, add_date, paid_date
          FROM invoices
          JOIN companies ON comp_code = code
          WHERE code = $1`, [code]);
-  const invoices = invoiceResults.rows;
+
+    const invoices = invoiceResults.rows;
 
   company.invoices = invoices;
-
-
-  if (!company) {
-    throw new NotFoundError("error");
-  }
 
   return res.json({ company });
 
@@ -56,9 +56,16 @@ router.get("/:code", async function (req, res) {
   Returns obj of new company: {company: {code, name, description}}*/
 
 router.post("/", async function (req, res) {
-  const { code, name, description } = req.body;
+  const { name, description } = req.body;
 
-  if (!code || !name || !description) {
+  const code = slugify(name,{
+    remove: undefined,
+    lower: true,
+    trim: true,
+    strict: true,
+  })
+
+  if ( !name || !description) {
     throw new BadRequestError("Please enter valid params");
   }
 
